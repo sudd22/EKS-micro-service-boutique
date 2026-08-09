@@ -1,0 +1,58 @@
+name: "3- terraform apply"
+on:
+    workflow_dispatch:
+        inputs:
+            target_dir:
+                description: "target directory for terraform apply"
+                required: true
+                default: "./terraform/cluster"
+                type: choice
+                options:
+                    - "./terraform/cluster"
+                    - "./terraform/persistent"
+            confirmation: 
+                description: "type 'apply-iac' to confirm terraform apply"
+                required: true
+                type: string
+permissions:
+    id-token: write
+    contents: read    
+env:
+    AWS_REGION: "eu-west-2"
+    AWS_ROLE_ARN: "arn:aws:iam::774667856934:role/github-actions-tf-apply-role"
+    TF_WORKING_DIR: "${{ inputs.target_dir }}"
+jobs:
+    terraform-apply:
+        name: "terraform apply (${{ inputs.target_dir }})"
+        runs-on: ubuntu-latest
+        steps:
+            - name: "Checkout Code"
+              uses: actions/checkout@v4
+
+            - name: "configure terraform"
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: "1.9.0"
+
+            - name: "configure OIDC"
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-region: ${{ env.AWS_REGION }}
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+
+            - name: "verify confirmation"
+              run: |
+                  if [ "${{ inputs.confirmation}}" != "apply-iac" ];
+                  then
+                    echo "::error::invalid confirmation '${{ inputs.confirmation }}'. You must type 'apply-iac' to proceed."
+                    exit 1
+                  fi
+                   echo "Confirmation verified successfully."
+            - name: "Terraform Init & Apply"
+              working-directory: ${{ inputs.target_dir }}
+              run: |
+                terraform init -reconfigure
+                terraform apply -auto-approve -input=false
+
+            
+                
