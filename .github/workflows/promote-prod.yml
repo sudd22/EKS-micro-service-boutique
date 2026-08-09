@@ -1,0 +1,69 @@
+name: "1b- Promote Image To Production"
+on:
+    workflow_dispatch:
+        inputs:
+            sha:
+                description: "Insert TheGit SHA already validated in dev"
+                required: true
+                type: string
+permissions:
+    id-token: write
+    contents: write
+    pull-requests: write
+
+env:
+    AWS_ROLE_TO_ASSUME: "arn:aws:iam::065803057361:role/cicd-cross-env-assumable-role"
+    AWS_REGION: "eu-west-2"
+
+jobs:
+    retag:
+        name: "Retag the same images for prod"
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: true
+            matrix:
+                service: ["auth", "order", "payment", "product", "notification"]
+        steps:
+            - name: "Configure OIDC for AWS"
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-region: ${{ env.AWS_REGION }}
+                  role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+            - name: "Promote the images to production"
+              run: |
+                  set -euo pipefail \
+                  REPO=b2b-${{ matrix.service }}
+                  SRC__TAG=dev-${{ inputs.sha }}
+                  DEST_TAG=prod-${{ inputs.sha }}
+                  MANIFEST=(aws ecr batch-get-image \
+                  --repository-name $REPO \
+                  --image-ids imageTag=$SRC_TAG \
+                  --query 'image0.imageManifest' --output text)
+                  if [ -Z "$MANiIFEST" ] || [ "$MANIFEST = None"]; then
+                  echo"::error::$REPO:$SRC_TAG not found in ECR"
+                  exit 1
+                  fi
+                  aws ecr put-image \
+                  --repository-name "$REPO" \
+                  --IMAGE-TAG "$DST_TAG" \
+                  --manifest "$MANIFEST"
+                  echo "Promoted $REPO:$SRC_TAG to $REPO:$DEST_TAG"
+
+    promote-prod-values:
+        name: "Promote values-prod.yml"
+        runs-on: ubuntu-latest
+        steps:
+            - name: "Checkout code"
+              uses: actions/checkout@v4
+            - name: "Promote values-prod.yml"
+              run: |
+                  yq -i 'image.tag = "prod-${{ github.inputs.sha }}"' kubernetes/b2b-app/helm/values-prod.yml
+
+            - name: "open a PR that requires humand approval"
+              uses: peter-evans/create-pull-request@v6
+              with:
+                  commit-message: "release(prod): promote ${{ inputs.sha }}"
+                  branch: "release/prod-${{ inputs.sha }}"
+                  title: "release(prod): promote ${{ inputs.sha }}"
+                  body: "Promotes dev-validated image digests (prod-${{ inputs.sha }}) to production.no rebuild. Requires review + approval."
+                  labels: "release,prod-deploy"
