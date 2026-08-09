@@ -1,0 +1,106 @@
+name: 1-test, build and push microservices
+on:
+    push:
+        branches: ["main"]
+        paths: ["app/**", ".github/workflows/build-and-push.yml"]
+    workflow_dispatch:
+permissions:
+    id-token: write
+    contents: write
+    pull-requests: write
+env:
+    AWS_REGION: "eu-west-2"
+    AWS_ROLE_ARN: "arn:aws:iam::774667856934:role/github-actions-ecr-push-role"
+jobs:
+    shift-left-testing:
+        name: "Lint & Test"
+        runs-on: ubuntu-latest
+        steps:
+            - name: "Checkout Code"
+              uses: actions/checkout@v4
+
+            - name: "Install Python"
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: "Install Test Dependancies"
+              working-directory: ./app
+              run: pip install ruff pytest httpx
+
+            - name: "Ruff Check"
+              working-directory: ./app
+              run: ruff check .
+
+            - name: "Pytest"
+              working-directory: ./app
+              run: pytest
+
+    build-matrix:
+        name: Build & Push
+        needs: shift-left-testing
+        runs-on: ubuntu-latest
+        strategy:
+            max-parallel: 5
+            fail-fast: true
+            matrix:
+                service: [auth, product, order, payment, notification]
+        steps:
+            - name: "Checkout Code"
+              uses: actions/checkout@v4
+
+            - name: "Build Image"
+              working-directory: ./app
+              run: |
+                  docker build --build-arg SERVICE_NAME=${{ matrix.service }} \
+                  -t b2b-${{ matrix.service }}-${{ github.sha }} .
+
+            - name: "Trivy Security Scan"
+              uses: aquasecurity/trivy-action@v0.28.0
+              with:
+                  image-ref: "b2b-${{ matrix.service }}-${{ github.sha }}"
+                  format: table
+                  severity: CRITICAL,HIGH
+                  ignore-unfixed: true
+                  vuln-type: "os,library"
+                  exit-code: "1"
+
+            - name: "Configure OIDC for AWS"
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-region: ${{ env.AWS_REGION }}
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+
+            - name: "Authenticate with ECR"
+              id: login-ecr
+              uses: aws-actions/amazon-ecr-login@v2
+
+            - name: "Tag and Push Image to ECR"
+              env:
+                  REGISTRY: ${{ steps.login-ecr.outputs.registry}}
+              run: |
+                  docker tag b2b-${{ matrix.service }}-${{ github.sha }} $REGISTRY/b2b-${{ matrix.service }}:dev-${{ github.sha }} 
+                  docker tag b2b-${{ matrix.service }}-${{ github.sha }} $REGISTRY/b2b-${{ matrix.service }}:latest
+                  docker push $REGISTRY/b2b-${{ matrix.service }}:dev-${{ github.sha }}
+                  docker push $REGISTRY/b2b-${{ matrix.service }}:latest
+
+    promote-to-dev:
+        name: "edit image tag for ArgoCD"
+        needs: build-matrix
+        runs-on: ubuntu-latest
+        steps:
+            - name: "Checkout Code"
+              uses: actions/checkout@v4
+
+            - name: "Update Image Tag in Helm Values"
+              run: |
+                  yq -i '.image.tag = "dev-${{ github.sha }}"' kubernetes/helm/b2b/values-dev.yaml
+
+            - name: "Open A Pull Request"
+              uses: peter-evans/create-pull-request@v5
+              with:
+                  commit-message: "ci(dev): deploy dev-${{ github.sha }}"
+                  branch: "ci/deploy-dev-${{ github.sha }}"
+                  title: "ci(dev): deploy dev-${{ github.sha }}"
+                  body: "Automated dev image bump. Prod is unaffected — promote via values-prod.yaml."
+                  labels: "automated,dev-deploy"
