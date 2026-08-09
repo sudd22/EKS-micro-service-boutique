@@ -1,0 +1,32 @@
+name: "5- Deploy Frontend"
+on:
+    push:
+        branches: ["main"]
+        paths: ["eks-frontend/**", ".github/workflows/deploy-frontend.yml"]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    id-token: write
+env:
+    AWS_REGION: "eu-west-2"
+    AWS_ROLE_ARN: "arn:aws:iam::774667856934:role/github-actions-frontend-deploy-role"
+    STOREFRONT_BUCKET: "b2b-platform-storefront-boutique"
+
+jobs:
+    deploy-frontend:
+        name: "sync storefront with s3"
+        runs-on: ubuntu-latest
+        steps:
+            - name: "checkout code"
+              uses: actions/checkout@v4
+
+            - name: "Configure OIDC"
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-region: "${{ env.AWS_REGION }}"
+                  role-to-assume: "${{ env.AWS_ROLE_ARN }}"
+
+            - name: "Sync frontend with S3"
+              run: |
+                  aws s3 sync ./eks-frontend s3://${{ env.STOREFRONT_BUCKET }}
