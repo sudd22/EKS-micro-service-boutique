@@ -1,0 +1,56 @@
+name: "4- Terraform destroy"
+on:
+    workflow_dispatch:
+        inputs:
+            target_dir:
+                description: "Target terraform directory to destroy"
+                type: choice
+                default: "./terraform/cluster"
+                required: true
+                options:
+                    - "./terraform/cluster"
+                    - "./terraform/persistent"
+            confirmation:
+                description: "Type 'destroy-iac' to confirm teardown"
+                type: string
+                required: true
+permissions:
+    id-token: write
+    contents: read
+env:
+    AWS_REGION: "eu-west-2"
+    AWS_ROLE_ARN: "arn:aws:iam::774667856934:role/github-actions-tf-destroy-role"
+
+jobs:
+    terraform-destroy:
+        name: "terraform destroy (${{ inputs.target_dir }})"
+        runs-on: ubuntu-latest
+        steps:
+            - name: "Checkout Code"
+              uses: actions/checkout@v4
+
+            - name: verify confirmation
+              run: |
+                  if [ "${{ inputs.confirmation}}" != "destroy-iac" ];
+                  then
+                  echo "::error:: invalid confirmation ${{ inputs.confirmation }}, you must type 'destroy-iac' to confirm destruction" 
+                  exit 1
+                  fi
+                  echo "confirmation verified successfully"
+
+            - name: configure OIDC
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-region: ${{ env.AWS_REGION }}
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+
+            - name: configure terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: "1.9.0"
+
+            - name: terraform init & destroy
+              working-directory: ${{ inputs.target_dir }}
+              run: |
+                  terraform init -reconfigure
+                  terraform destroy -auto-approve -input=false
