@@ -1,0 +1,68 @@
+name: "2- Infravastructure Lint and Plan"
+on:
+    push:
+        paths: ["terraform/**", ".github/workflows/terraform-plan.yml"]
+        branches: ["main"]
+    workflow_dispatch:
+permissions:
+    id-token: write
+    contents: read
+env:
+    AWS_REGION: "eu-west-2"
+    AWS_ROLE_ARN: "arn:aws:iam::774667856934:role/github-actions-tf-plan-role"
+    TF_WORKING_DIR: "./terraform/cluster"
+jobs:
+    validate-and-plan:
+        name: "lint,validate,checkov and plan"
+        runs-on: ubuntu-latest
+        steps:
+            - name: "Checkout Code"
+              uses: actions/checkout@v4
+
+            - name: "configure terraform"
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: "1.9.0"
+
+            - name: "formatting"
+              working-directory: ./terraform
+              run: terraform fmt -check -recursive
+
+            - name: "init to validate"
+              working-directory: ${{ env.TF_WORKING_DIR }}
+              run: terraform init -backend=false
+
+            - name: "validate"
+              working-directory: ${{ env.TF_WORKING_DIR }}
+              run: terraform validate
+
+            - name: "setup tf lint"
+              uses: terraform-linters/setup-tflint@v4
+              with:
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: "run tflint"
+              working-directory: ${{ env.TF_WORKING_DIR }}
+              run: |
+                  tflint --init
+                  tflint -f compact
+
+            - name: "checkov scan"
+              uses: bridgecrewio/checkov-action@master
+              with:
+                  framework: terraform
+                  output: cli
+                  soft_fail: true
+                  skip-check: CKV_AWS_39,CKV_AWS_157
+
+            - name: "configure OIDC"
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-region: ${{ env.AWS_REGION }}
+                  role-to-assume: ${{ env.AWS_ROLE_ARN }}
+
+            - name: "tf plan for dev"
+              working-directory: ${{ env.TF_WORKING_DIR }}
+              run: |
+                  terraform init -reconfigure
+                  terraform plan -input=false
