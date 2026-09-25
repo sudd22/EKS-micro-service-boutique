@@ -32,7 +32,7 @@ jobs:
             - name: "Promote the images to production"
               run: |
                   set -euo pipefail \
-                  REPO=b2b-${{ matrix.service }}
+                  REPO=microservice-${{ matrix.service }}
                   SRC__TAG=dev-${{ inputs.sha }}
                   DEST_TAG=prod-${{ inputs.sha }}
                   MANIFEST=(aws ecr batch-get-image \
@@ -57,7 +57,7 @@ jobs:
               uses: actions/checkout@v4
             - name: "Promote values-prod.yml"
               run: |
-                  yq -i 'image.tag = "prod-${{ github.inputs.sha }}"' kubernetes/b2b-app/helm/values-prod.yml
+                  yq -i 'image.tag = "prod-${{ github.inputs.sha }}"' kubernetes/microservice-app/helm/values-prod.yml
 
             - name: "open a PR that requires humand approval"
               uses: peter-evans/create-pull-request@v6
