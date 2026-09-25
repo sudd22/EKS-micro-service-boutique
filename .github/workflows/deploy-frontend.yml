@@ -11,7 +11,7 @@ permissions:
 env:
     AWS_REGION: "eu-west-2"
     AWS_ROLE_ARN: "arn:aws:iam::774667856934:role/github-actions-frontend-deploy-role"
-    STOREFRONT_BUCKET: "b2b-platform-storefront-boutique"
+    STOREFRONT_BUCKET: "microservice-platform-storefront-boutique"
 
 jobs:
     deploy-frontend:
