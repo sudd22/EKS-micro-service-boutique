@@ -1,0 +1,6 @@
+image:
+  tag: "prod-latest"
+replicaCount: 2
+wafWebAclArn: "arn:aws:wafv2:eu-west-2:774667856934:regional/webacl/microservice-edge-firewall/<id>"
+dbSecretPrefix: "microservices/prod"
+authpool: { size:"20", overflow:"30" }
