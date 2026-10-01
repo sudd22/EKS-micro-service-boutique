@@ -1,0 +1,6 @@
+apiVersion: v2
+name: microservice-app
+type: application
+version: 1.0.0
+appVersion: 1.0.0
+description: A helm chart for all microservices in the platform
