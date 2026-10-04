@@ -77,7 +77,7 @@ resource "aws_cloudfront_distribution" "store_front" {
   origin {
     origin_id                = "s3-store_front"
     domain_name              = var.storefront_bucket_regional_domain_name
-    origin_access_control_id = aws_origin_access_control.s3_access.id
+    origin_access_control_id = aws_cloudfront_origin_access_control.s3_access.id
   }
   origin {
     origin_id   = "eks-alb"
