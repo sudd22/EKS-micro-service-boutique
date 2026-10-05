@@ -1,67 +1,40 @@
-resource "aws_iam_role" "order_sqs" {
-  name = "microservice-order-sqs-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole",
-      Effect = "Allow",
-      Principal = {
-    Service = "pods.eks.amazonaws.com" } }]
-  })
-}
-
 resource "aws_iam_role_policy" "order_sqs" {
-  name = "order-sqs-publish"
-  role = aws_iam_role.order_sqs.name
+  for_each = {
+    for key, pair in local.service_env :
+    key => pair if pair.svc == "order"
+  }
+
+  name = "order-sqs-publish-${each.value.env}"
+  role = aws_iam_role.db_secret[each.key].name
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Action   = "sqs:SendMessage"
       Effect   = "Allow"
-      Resource = [var.sqs_queue_arns["dev"], var.sqs_queue_arns["prod"]]
-    }]
-  })
-}
-
-resource "aws_eks_pod_identity_association" "order_sqs" {
-  for_each        = toset(["dev", "prod"])
-  cluster_name    = var.cluster_name
-  namespace       = each.key
-  service_account = "order-sa"
-  role_arn        = aws_iam_role.order_sqs.arn
-}
-
-resource "aws_iam_role" "notification_sqs" {
-  name = "microservice-notification-sqs-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole",
-      Effect    = "Allow",
-      Principal = { Service = "pods.eks.amazonaws.com" }
+      Resource = var.sqs_queue_arns[each.value.env]
     }]
   })
 }
 
 resource "aws_iam_role_policy" "notification_sqs" {
-  name = "notification-sqs-consume"
-  role = aws_iam_role.notification_sqs.name
+  for_each = {
+    for key, pair in local.service_env :
+    key => pair if pair.svc == "notification"
+  }
+
+  name = "notification-sqs-consume-${each.value.env}"
+  role = aws_iam_role.db_secret[each.key].name
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
-      Effect   = "Allow"
-      Resource = [var.sqs_queue_arns["dev"], var.sqs_queue_arns["prod"], var.sqs_dlq_arns["dev"], var.sqs_dlq_arns["prod"]]
+      Action = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+      Effect = "Allow"
+      Resource = [
+        var.sqs_queue_arns[each.value.env],
+        var.sqs_dlq_arns[each.value.env]
+      ]
     }]
   })
-}
-
-resource "aws_eks_pod_identity_association" "notification_sqs" {
-  for_each        = toset(["dev", "prod"])
-  cluster_name    = var.cluster_name
-  namespace       = each.key
-  service_account = "notification-sa"
-  role_arn        = aws_iam_role.notification_sqs.arn
 }
 
 resource "aws_iam_role" "alertmanager" {
@@ -69,7 +42,7 @@ resource "aws_iam_role" "alertmanager" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action    = "sts:AssumeRole"
+      Action = ["sts:AssumeRole", "sts:TagSession"]
       Effect    = "Allow"
       Principal = { Service = "pods.eks.amazonaws.com" }
     }]
@@ -108,7 +81,11 @@ resource "aws_iam_role" "db_secret" {
   name     = "microservice-db-secret-${each.key}"
   assume_role_policy = jsonencode({
     Version   = "2012-10-17"
-    Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "pods.eks.amazonaws.com" } }]
+    Statement = [{ 
+      Action = ["sts:AssumeRole", "sts:TagSession"]
+      Effect = "Allow", 
+      Principal = { Service = "pods.eks.amazonaws.com" } 
+    }]
   })
 }
 
@@ -134,37 +111,24 @@ resource "aws_eks_pod_identity_association" "db_secret" {
   role_arn        = aws_iam_role.db_secret[each.key].arn
 }
 
-resource "aws_iam_role" "auth_throttle" {
-  name = "microservice-auth-throttle-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "pods.eks.amazonaws.com" }
-    }]
-  })
-}
-
 resource "aws_iam_role_policy" "auth_throttle" {
-  name = "auth-throttle-scan"
-  role = aws_iam_role.auth_throttle.name
+
+  for_each = {
+    for key, pair in local.service_env :
+    key => pair if pair.svc == "auth"
+  }
+
+  name = "auth-throttle-scan-${each.value.env}"
+  role = aws_iam_role.db_secret[each.key].name
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Action   = "dynamodb:Scan"
       Effect   = "Allow"
-      Resource = "*"
+      Resource = var.throttle_table_arn
     }]
   })
-}
-
-resource "aws_eks_pod_identity_association" "auth_throttle" {
-  for_each        = toset(["dev", "prod"])
-  cluster_name    = var.cluster_name
-  namespace       = each.key
-  service_account = "auth-sa"
-  role_arn        = aws_iam_role.auth_throttle.arn
 }
 
 resource "aws_iam_role" "otel_xray" {
@@ -172,7 +136,7 @@ resource "aws_iam_role" "otel_xray" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action    = "sts:AssumeRole"
+      Action = ["sts:AssumeRole", "sts:TagSession"]
       Effect    = "Allow"
       Principal = { Service = "pods.eks.amazonaws.com" }
     }]

@@ -17,3 +17,7 @@ variable "sqs_queue_arns" {
 variable "sqs_dlq_arns" {
   type = map(string)
 }
+
+variable "throttle_table_arn" {
+  type = string
+}
