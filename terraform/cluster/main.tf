@@ -45,9 +45,8 @@ module "pod_identity" {
   source              = "../modules/pod_identity"
   cluster_name        = module.eks.cluster_name
   sns_aiops_topic_arn = data.terraform_remote_state.persistent.outputs.sns_aiops_topic_arn
-
+  throttle_table_arn  = data.terraform_remote_state.persistent.outputs.throttle_table_arn
   db_secret_arns = data.terraform_remote_state.persistent.outputs.db_secret_arns
-
   sqs_queue_arns = {
     dev  = module.sqs_dev.queue_arn
     prod = module.sqs_prod.queue_arn
