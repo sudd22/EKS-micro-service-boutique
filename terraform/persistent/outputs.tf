@@ -26,3 +26,8 @@ output "storefront_bucket" {
   value       = aws_s3_bucket.storefront.bucket
   description = "S3 bucket for static storefront"
 }
+
+output "throttle_table_arn" {
+  value       = aws_dynamodb_table.throttle_config.arn
+  description = "ARN of the AIOps throttle table"
+}
