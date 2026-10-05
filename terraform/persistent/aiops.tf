@@ -8,7 +8,7 @@ resource "aws_sns_topic" "aiops_alerts" {
 }
 
 resource "aws_dynamodb_table" "throttle_config" {
-  name         = "ai-throtle-config"
+  name         = "ai-throttle-config"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "RuleName"
 
