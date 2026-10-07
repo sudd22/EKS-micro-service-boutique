@@ -93,7 +93,21 @@ resource "helm_release" "karpenter" {
   depends_on = [aws_eks_pod_identity_association.karpenter]
 }
 
+resource "aws_iam_instance_profile" "karpenter_node" {
+  name = "microservice-karpenter-node-profile"
+  role = aws_iam_role.karpenter_node.name
+  depends_on = [
+    aws_iam_role_policy_attachment.karpenter_node_policies
+  ]
+}
 
+resource "aws_eks_access_entry" "karpenter_node" {
+  cluster_name  = var.cluster_name
+  principal_arn = aws_iam_role.karpenter_node.arn
+  type          = "EC2_LINUX"
+}
+
+/*
 resource "kubernetes_manifest" "karpenter_node_class" {
   manifest = {
     apiVersion = "karpenter.k8s.aws/v1"
@@ -160,17 +174,4 @@ resource "kubernetes_manifest" "karpenter_node_pool" {
   }
   depends_on = [kubernetes_manifest.karpenter_node_class]
 }
-
-resource "aws_iam_instance_profile" "karpenter_node" {
-  name = "microservice-karpenter-node-profile"
-  role = aws_iam_role.karpenter_node.name
-  depends_on = [
-    aws_iam_role_policy_attachment.karpenter_node_policies
-  ]
-}
-
-resource "aws_eks_access_entry" "karpenter_node" {
-  cluster_name  = var.cluster_name
-  principal_arn = aws_iam_role.karpenter_node.arn
-  type          = "EC2_LINUX"
-}
+*/
