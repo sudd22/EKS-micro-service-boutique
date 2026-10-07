@@ -61,6 +61,8 @@ module "pod_identity" {
 module "waf" {
   source = "../modules/waf"
 }
+
+/*
 module "cloudfront_frontend" {
   source                                 = "../modules/cloudfront_frontend"
   domain_name                            = var.domain_name
@@ -70,3 +72,4 @@ module "cloudfront_frontend" {
     aws.us_east_1 = aws.us_east_1
   }
 }
+*/
